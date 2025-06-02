@@ -6,5 +6,5 @@ import com.progressoft.fxdeals.dto.request.FxDealRequest;
 
 public interface FxDealService {
 
-   public void importDeals(List<FxDealRequest> requests); 
+public void importDeals(List<FxDealRequest> requests); 
 } 

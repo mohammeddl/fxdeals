@@ -16,26 +16,23 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class FxDealServiceImpl implements FxDealService {
-
     private final FxDealRepository repo;
 
+    @Override
     public void importDeals(List<FxDealRequest> requests) {
         requests.forEach(r -> {
             if (repo.existsById(r.id())) {
-                // If the deal already exists, skip it.
                 return;
             }
             FxDeal entity = FxDeal.builder()
-                    .id(r.id())
-                    .fromCurrency(r.fromCurrency())
-                    .toCurrency(r.toCurrency())
-                    .dealTimestamp(r.dealTimestamp())
-                    .amount(r.amount())
-                    .build();
+                .id(r.id())
+                .fromCurrency(r.fromCurrency())
+                .toCurrency(r.toCurrency())
+                .dealTimestamp(r.dealTimestamp())
+                .amount(r.amount())
+                .build();
             repo.save(entity);
         });
     }
-    
 }
