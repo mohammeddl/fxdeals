@@ -1,0 +1,28 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: fxdeals-db
+    environment:
+      POSTGRES_DB: fxdeals
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 0074
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fxuser -d fxdeals"]
+      interval: 10s
+      retries: 5
+
+  app:
+    build: .
+    container_name: fxdeals-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/fxdeals
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: 0074
+    ports:
+      - "8080:8080"
