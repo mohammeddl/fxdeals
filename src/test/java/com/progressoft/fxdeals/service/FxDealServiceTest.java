@@ -3,86 +3,153 @@ package com.progressoft.fxdeals.service;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import com.progressoft.fxdeals.dto.request.FxDealRequest;
+import com.progressoft.fxdeals.dto.response.FxDealResponse;
+import com.progressoft.fxdeals.mapper.FxDealMapper;
+import com.progressoft.fxdeals.model.FxDeal;
 import com.progressoft.fxdeals.repository.FxDealRepository;
 import com.progressoft.fxdeals.service.impl.FxDealServiceImpl;
 
-@ExtendWith(MockitoExtension.class)
-public class FxDealServiceTest {
+class FxDealServiceTest {
 
-@Mock FxDealRepository repo;
-@InjectMocks FxDealServiceImpl service;
+    @Mock
+    private FxDealRepository repo;
 
-    
-@Test
-void importDeals_allValid_allSaved() {
-    FxDealRequest d1 = new FxDealRequest(
-            UUID.randomUUID(), "USD", "EUR",
-            OffsetDateTime.now(), BigDecimal.valueOf(1_000));
+    private FxDealMapper mapper = Mappers.getMapper(FxDealMapper.class);
 
-    FxDealRequest d2 = new FxDealRequest(
-            UUID.randomUUID(), "GBP", "JPY",
-            OffsetDateTime.now(), BigDecimal.valueOf(250));
+    @InjectMocks
+    private FxDealServiceImpl service;
 
-    when(repo.existsById(any())).thenReturn(false);
+    private UUID existingId;
+    private UUID newId;
 
-    service.importDeals(List.of(d1, d2));
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        existingId = UUID.randomUUID();
+        newId = UUID.randomUUID();
+    }
 
-    verify(repo, times(2)).save(argThat(e ->
-            Set.of(d1.id(), d2.id()).contains(e.getId())));
-}
-@Test
-void importDeals_duplicate_skipped() {
-    UUID duplicateId = UUID.randomUUID();
-    FxDealRequest request = new FxDealRequest(
-            duplicateId, "CAD", "CHF",
-            OffsetDateTime.now(), BigDecimal.valueOf(300));
+    @Test
+    void whenDuplicateId_thenSkipSave() {
+        FxDealRequest request = new FxDealRequest(
+                existingId,
+                "USD",
+                "EUR",
+                OffsetDateTime.now(),
+                new BigDecimal("100.00")
+        );
 
-    when(repo.existsById(duplicateId)).thenReturn(true);
+        when(repo.existsById(existingId)).thenReturn(true);
 
-    service.importDeals(List.of(request));
+        service.importDeals(List.of(request));
 
-    verify(repo, never()).save(any());
-    verify(repo).existsById(duplicateId);
-}
-// @Test
-// void importDeals_partialFailure_firstPersists() {
-//     FxDealRequest ok   = new FxDealRequest(
-//             UUID.randomUUID(), "CHF", "USD",
-//             OffsetDateTime.now(), BigDecimal.valueOf(900.50));
+        verify(repo, never()).save(any(FxDeal.class));
+    }
 
-//     FxDealRequest boom = new FxDealRequest(
-//             UUID.randomUUID(), "AUD", "NZD",
-//             OffsetDateTime.now(), BigDecimal.valueOf(123.45));
+    @Test
+    void whenNewId_thenSaveIsCalled() {
+        FxDealRequest request = new FxDealRequest(
+                newId,
+                "GBP",
+                "JPY",
+                OffsetDateTime.now(),
+                new BigDecimal("250.50")
+        );
 
-//     when(repo.existsById(any()))
-//             .thenReturn(false)  
-//             .thenReturn(false); 
+        when(repo.existsById(newId)).thenReturn(false);
 
-//     doNothing()
-//         .doThrow(new DataIntegrityViolationException("Simulated DB failure"))
-//         .when(repo).save(any(FxDeal.class));
+        service.importDeals(List.of(request));
+        verify(repo, times(1)).save(argThat(entity ->
+                entity.getId().equals(newId) &&
+                entity.getFromCurrency().equals("GBP") &&
+                entity.getToCurrency().equals("JPY") &&
+                entity.getAmount().compareTo(new BigDecimal("250.50")) == 0
+        ));
+    }
 
-//     assertThrows(DataIntegrityViolationException.class,
-//                  () -> service.importDeals(List.of(ok, boom)));
+    @Test
+    void whenSaveThrowsDataIntegrityViolation_thenContinueNext() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
 
-//     verify(repo, times(2)).save(any(FxDeal.class));
-//     verify(repo).save(argThat(e -> e.getId().equals(ok.id())));
-// }
+        FxDealRequest r1 = new FxDealRequest(
+                id1, "AUD", "CAD", OffsetDateTime.now(), new BigDecimal("300.00")
+        );
+        FxDealRequest r2 = new FxDealRequest(
+                id2, "NZD", "CHF", OffsetDateTime.now(), new BigDecimal("150.00")
+        );
+        when(repo.existsById(id1)).thenReturn(false);
+        when(repo.existsById(id2)).thenReturn(false);
 
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(repo).save(argThat(e -> e.getId().equals(id2)));
+
+        service.importDeals(List.of(r1, r2));
+
+        verify(repo, times(2)).save(any(FxDeal.class));
+    }
+
+    @Test
+    void whenGetAllDeals_thenReturnsDtoList() {
+        FxDeal e1 = new FxDeal(
+                newId, "USD", "EUR", OffsetDateTime.now(), new BigDecimal("100.00")
+        );
+        FxDeal e2 = new FxDeal(
+                UUID.randomUUID(), "GBP", "JPY", OffsetDateTime.now(), new BigDecimal("200.00")
+        );
+
+        when(repo.findAll()).thenReturn(List.of(e1, e2));
+
+        List<FxDealResponse> responses = service.getAllDeals();
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses)
+                .extracting(FxDealResponse::id)
+                .containsExactlyInAnyOrder(newId, e2.getId());
+    }
+
+    @Test
+    void whenGetDealByIdExists_thenReturnsDto() {
+        FxDeal entity = new FxDeal(
+                existingId, "NZD", "USD", OffsetDateTime.now(), new BigDecimal("75.25")
+        );
+
+        when(repo.findById(existingId)).thenReturn(Optional.of(entity));
+
+        FxDealResponse dto = service.getDealById(existingId);
+
+        assertThat(dto.id()).isEqualTo(existingId);
+        assertThat(dto.fromCurrency()).isEqualTo("NZD");
+        assertThat(dto.toCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void whenGetDealByIdNotExists_thenThrow() {
+        when(repo.findById(existingId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getDealById(existingId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FX deal not found");
+    }
 }
