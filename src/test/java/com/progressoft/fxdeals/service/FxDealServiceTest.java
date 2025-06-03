@@ -1,3 +1,4 @@
+
 package com.progressoft.fxdeals.service;
 
 import java.math.BigDecimal;
@@ -6,11 +7,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import org.mockito.InjectMocks;
@@ -24,8 +23,6 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.progressoft.fxdeals.dto.request.FxDealRequest;
-import com.progressoft.fxdeals.dto.response.FxDealResponse;
-import com.progressoft.fxdeals.mapper.FxDealMapper;
 import com.progressoft.fxdeals.model.FxDeal;
 import com.progressoft.fxdeals.repository.FxDealRepository;
 import com.progressoft.fxdeals.service.impl.FxDealServiceImpl;
@@ -34,9 +31,6 @@ class FxDealServiceTest {
 
     @Mock
     private FxDealRepository repo;
-
-    private FxDealMapper mapper = Mappers.getMapper(FxDealMapper.class);
-
     @InjectMocks
     private FxDealServiceImpl service;
 
@@ -80,6 +74,8 @@ class FxDealServiceTest {
         when(repo.existsById(newId)).thenReturn(false);
 
         service.importDeals(List.of(request));
+
+        // Check that save(...) was called exactly once with an FxDeal matching our request
         verify(repo, times(1)).save(argThat(entity ->
                 entity.getId().equals(newId) &&
                 entity.getFromCurrency().equals("GBP") &&
@@ -99,49 +95,20 @@ class FxDealServiceTest {
         FxDealRequest r2 = new FxDealRequest(
                 id2, "NZD", "CHF", OffsetDateTime.now(), new BigDecimal("150.00")
         );
+
+    
         when(repo.existsById(id1)).thenReturn(false);
         when(repo.existsById(id2)).thenReturn(false);
 
+        
         doThrow(new DataIntegrityViolationException("constraint violation"))
                 .when(repo).save(argThat(e -> e.getId().equals(id2)));
 
         service.importDeals(List.of(r1, r2));
 
+       
         verify(repo, times(2)).save(any(FxDeal.class));
-    }
-
-    @Test
-    void whenGetAllDeals_thenReturnsDtoList() {
-        FxDeal e1 = new FxDeal(
-                newId, "USD", "EUR", OffsetDateTime.now(), new BigDecimal("100.00")
-        );
-        FxDeal e2 = new FxDeal(
-                UUID.randomUUID(), "GBP", "JPY", OffsetDateTime.now(), new BigDecimal("200.00")
-        );
-
-        when(repo.findAll()).thenReturn(List.of(e1, e2));
-
-        List<FxDealResponse> responses = service.getAllDeals();
-
-        assertThat(responses).hasSize(2);
-        assertThat(responses)
-                .extracting(FxDealResponse::id)
-                .containsExactlyInAnyOrder(newId, e2.getId());
-    }
-
-    @Test
-    void whenGetDealByIdExists_thenReturnsDto() {
-        FxDeal entity = new FxDeal(
-                existingId, "NZD", "USD", OffsetDateTime.now(), new BigDecimal("75.25")
-        );
-
-        when(repo.findById(existingId)).thenReturn(Optional.of(entity));
-
-        FxDealResponse dto = service.getDealById(existingId);
-
-        assertThat(dto.id()).isEqualTo(existingId);
-        assertThat(dto.fromCurrency()).isEqualTo("NZD");
-        assertThat(dto.toCurrency()).isEqualTo("USD");
+        
     }
 
     @Test

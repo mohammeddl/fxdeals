@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,16 +32,12 @@ public class FxDealServiceImpl implements FxDealService {
         }
 
         for (FxDealRequest r : requests) {
-            // r.id() is already a UUID (Bean Validation ensures non-null UUID)
             UUID dealId = r.id();
 
-            // 1) Check for duplicate
             if (repo.existsById(dealId)) {
                 log.info("Skipping duplicate FX deal with ID {}", dealId);
                 continue;
             }
-
-            // 2) Build FxDeal entity directly from request fields
             FxDeal entity = FxDeal.builder()
                     .id(dealId)
                     .fromCurrency(r.fromCurrency())
@@ -51,13 +46,11 @@ public class FxDealServiceImpl implements FxDealService {
                     .amount(r.amount())
                     .build();
 
-            // 3) Attempt to save; catch any data integrity exceptions to avoid rollback
             try {
                 repo.save(entity);
                 log.info("Inserted FX deal {}", dealId);
             } catch (DataIntegrityViolationException ex) {
                 log.error("Data integrity violation when inserting FX deal {}: {}", dealId, ex.getMessage());
-                // continue to next request; do not let one bad row roll back all previous inserts
             } catch (Exception ex) {
                 log.error("Unexpected error when inserting FX deal {}: {}", dealId, ex.getMessage());
             }
