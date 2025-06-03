@@ -37,8 +37,7 @@ This project uses a manually created `fx_deal` table and validates schema at sta
    - Records inserts, skips, and errors.
 
 7. **Testing**
-   - Comprehensive unit tests (service + mapper) with Mockito and AssertJ.
-   - Integration tests using H2 in-memory database for end-to-end validation.
+   - Comprehensive unit tests (service + mapper) with Mockito.
 
 8. **Deployment**
    - Dockerized setup for easy containerized deployment.
