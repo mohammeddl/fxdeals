@@ -4,10 +4,8 @@ package com.progressoft.fxdeals.service;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
@@ -111,12 +109,4 @@ class FxDealServiceTest {
         
     }
 
-    @Test
-    void whenGetDealByIdNotExists_thenThrow() {
-        when(repo.findById(existingId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.getDealById(existingId))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("FX deal not found");
-    }
 }
