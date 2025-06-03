@@ -7,18 +7,20 @@ import java.util.UUID;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 
 public record FxDealRequest(
-    @NotNull(message = "ID cannot be null")
+        @NotNull
     UUID id,
-    @Pattern(regexp = "^[A-Z]{3}$")
-    String fromCurrency, 
-    @Pattern(regexp = "^[A-Z]{3}$")
+    @NotNull
+    String fromCurrency,
+    @NotNull
     String toCurrency, 
     @NotNull
-    OffsetDateTime dealTimestamp, 
-    @DecimalMin("0.0")
-    BigDecimal amount
+    OffsetDateTime dealTimestamp,
+        @Positive(message="amount must be > 0")
+        @NotNull
+        BigDecimal amount
 ) {
     
 }
