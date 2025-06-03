@@ -1,16 +1,21 @@
 package com.progressoft.fxdeals.controller;
 
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.progressoft.fxdeals.dto.request.FxDealRequest;
 import com.progressoft.fxdeals.dto.response.FxDealResponse;
 import com.progressoft.fxdeals.service.FxDealService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/deals")
@@ -20,22 +25,12 @@ public class FxDealController {
 
     private final FxDealService service;
 
-
-    @PostMapping("/import")
-    public ResponseEntity<Void> importDeals(@RequestBody List<@Valid FxDealRequest> payload) {
-        service.importDeals(payload);
-        return ResponseEntity.accepted().build();
+ @PostMapping("/import")
+    public ResponseEntity<FxDealResponse> importDeal(@RequestBody FxDealRequest fxDealRequest) {
+        FxDealResponse importedDeal = service.importDeal(fxDealRequest);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(importedDeal);
     }
 
-    @GetMapping
-    public ResponseEntity<List<FxDealResponse>> getAllDeals() {
-        List<FxDealResponse> list = service.getAllDeals();
-        return ResponseEntity.ok(list);
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<FxDealResponse> getDealById(@PathVariable UUID id) {
-        FxDealResponse dto = service.getDealById(id);
-        return ResponseEntity.ok(dto);
-    }
 }

@@ -1,122 +1,130 @@
-
 package com.progressoft.fxdeals.service;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import org.mockito.MockitoAnnotations;
-import org.springframework.dao.DataIntegrityViolationException;
-
 import com.progressoft.fxdeals.dto.request.FxDealRequest;
+import com.progressoft.fxdeals.dto.response.FxDealResponse;
+import com.progressoft.fxdeals.exception.RequestAlreadyExistException;
+import com.progressoft.fxdeals.exception.ValidationException;
+import com.progressoft.fxdeals.mapper.FxDealMapper;
 import com.progressoft.fxdeals.model.FxDeal;
 import com.progressoft.fxdeals.repository.FxDealRepository;
+import com.progressoft.fxdeals.validation.FxDealValidator;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import com.progressoft.fxdeals.service.impl.FxDealServiceImpl;
 
+@ExtendWith(MockitoExtension.class)
 class FxDealServiceTest {
+        private static final UUID TEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
-    @Mock
-    private FxDealRepository repo;
-    @InjectMocks
-    private FxDealServiceImpl service;
+        @Mock
+        private FxDealRepository repo;
 
-    private UUID existingId;
-    private UUID newId;
+        @Mock
+        private FxDealMapper mapper;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        existingId = UUID.randomUUID();
-        newId = UUID.randomUUID();
-    }
+        @Mock
+        private FxDealValidator validator;
 
-    @Test
-    void whenDuplicateId_thenSkipSave() {
-        FxDealRequest request = new FxDealRequest(
-                existingId,
-                "USD",
-                "EUR",
-                OffsetDateTime.now(),
-                new BigDecimal("100.00")
-        );
+        @InjectMocks
+        private FxDealServiceImpl service;
 
-        when(repo.existsById(existingId)).thenReturn(true);
+        private FxDealRequest validRequest() {
+                FxDealRequest dto = mock(FxDealRequest.class);
+                when(dto.id()).thenReturn(TEST_ID);
+                when(dto.fromCurrency()).thenReturn("USD");
+                when(dto.toCurrency()).thenReturn("EUR");
+                when(dto.amount()).thenReturn(new BigDecimal("100.00"));
+                return dto;
+        }
 
-        service.importDeals(List.of(request));
+        @Test
+        void importDeal_Success() {
+                FxDealRequest dto = validRequest();
+                FxDeal entity = mock(FxDeal.class);
+                FxDeal savedEntity = mock(FxDeal.class);
+                FxDealResponse resp = mock(FxDealResponse.class);
 
-        verify(repo, never()).save(any(FxDeal.class));
-    }
+                doNothing().when(validator).validate(dto);
+                when(repo.existsById(TEST_ID)).thenReturn(false);
+                when(mapper.toEntity(dto)).thenReturn(entity);
+                when(repo.save(entity)).thenReturn(savedEntity);
+                when(mapper.toResponse(savedEntity)).thenReturn(resp);
 
-    @Test
-    void whenNewId_thenSaveIsCalled() {
-        FxDealRequest request = new FxDealRequest(
-                newId,
-                "GBP",
-                "JPY",
-                OffsetDateTime.now(),
-                new BigDecimal("250.50")
-        );
+                FxDealResponse actual = service.importDeal(dto);
 
-        when(repo.existsById(newId)).thenReturn(false);
-
-        service.importDeals(List.of(request));
-
-        // Check that save(...) was called exactly once with an FxDeal matching our request
-        verify(repo, times(1)).save(argThat(entity ->
-                entity.getId().equals(newId) &&
-                entity.getFromCurrency().equals("GBP") &&
-                entity.getToCurrency().equals("JPY") &&
-                entity.getAmount().compareTo(new BigDecimal("250.50")) == 0
-        ));
-    }
-
-    @Test
-    void whenSaveThrowsDataIntegrityViolation_thenContinueNext() {
-        UUID id1 = UUID.randomUUID();
-        UUID id2 = UUID.randomUUID();
-
-        FxDealRequest r1 = new FxDealRequest(
-                id1, "AUD", "CAD", OffsetDateTime.now(), new BigDecimal("300.00")
-        );
-        FxDealRequest r2 = new FxDealRequest(
-                id2, "NZD", "CHF", OffsetDateTime.now(), new BigDecimal("150.00")
-        );
-
-    
-        when(repo.existsById(id1)).thenReturn(false);
-        when(repo.existsById(id2)).thenReturn(false);
-
+                assertSame(resp, actual);
+                verify(validator).validate(dto);
+                verify(repo).existsById(TEST_ID);
+                verify(mapper).toEntity(dto);
+                verify(repo).save(entity);
+                verify(mapper).toResponse(savedEntity);
+        }
         
-        doThrow(new DataIntegrityViolationException("constraint violation"))
-                .when(repo).save(argThat(e -> e.getId().equals(id2)));
+        @Test
+        void importDeal_ThrowsRequestAlreadyExistException_WhenDuplicate() {
+                FxDealRequest dto = validRequest();
 
-        service.importDeals(List.of(r1, r2));
+                doNothing().when(validator).validate(dto);
+                when(repo.existsById(TEST_ID)).thenReturn(true);
 
-       
-        verify(repo, times(2)).save(any(FxDeal.class));
-        
-    }
+                RequestAlreadyExistException ex = assertThrows(
+                                RequestAlreadyExistException.class,
+                                () -> service.importDeal(dto));
+                assertTrue(ex.getMessage().contains(TEST_ID.toString()));
 
-    @Test
-    void whenGetDealByIdNotExists_thenThrow() {
-        when(repo.findById(existingId)).thenReturn(Optional.empty());
+                verify(validator).validate(dto);
+                verify(repo).existsById(TEST_ID);
+                verifyNoInteractions(mapper);
+        }
 
-        assertThatThrownBy(() -> service.getDealById(existingId))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("FX deal not found");
-    }
+        @Test
+        void importDeal_PropagatesDataIntegrityViolationException_WhenSaveFails() {
+                FxDealRequest dto = validRequest();
+                FxDeal entity = mock(FxDeal.class);
+
+                doNothing().when(validator).validate(dto);
+                when(repo.existsById(TEST_ID)).thenReturn(false);
+                when(mapper.toEntity(dto)).thenReturn(entity);
+                when(repo.save(entity))
+                                .thenThrow(new DataIntegrityViolationException("DB error"));
+
+                DataIntegrityViolationException ex = assertThrows(
+                                DataIntegrityViolationException.class,
+                                () -> service.importDeal(dto));
+                assertEquals("DB error", ex.getMessage());
+
+                verify(mapper).toEntity(dto);
+                verify(repo).save(entity);
+        }
+
+        @Test
+        void importDeal_PropagatesRuntimeException_WhenMapperFails() {
+                FxDealRequest dto = validRequest();
+
+                doNothing().when(validator).validate(dto);
+                when(repo.existsById(TEST_ID)).thenReturn(false);
+                when(mapper.toEntity(dto))
+                                .thenThrow(new RuntimeException("mapping broken"));
+
+                RuntimeException ex = assertThrows(
+                                RuntimeException.class,
+                                () -> service.importDeal(dto));
+                assertEquals("mapping broken", ex.getMessage());
+
+                verify(mapper).toEntity(dto);
+                verify(repo, never()).save(any());
+        }
 }

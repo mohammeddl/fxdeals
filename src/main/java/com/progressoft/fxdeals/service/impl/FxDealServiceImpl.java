@@ -1,20 +1,17 @@
 package com.progressoft.fxdeals.service.impl;
+import org.springframework.stereotype.Service;
 
 import com.progressoft.fxdeals.dto.request.FxDealRequest;
 import com.progressoft.fxdeals.dto.response.FxDealResponse;
-import com.progressoft.fxdeals.model.FxDeal;
 import com.progressoft.fxdeals.mapper.FxDealMapper;
+import com.progressoft.fxdeals.model.FxDeal;
 import com.progressoft.fxdeals.repository.FxDealRepository;
 import com.progressoft.fxdeals.service.FxDealService;
-import jakarta.transaction.Transactional;
+import com.progressoft.fxdeals.validation.FxDealValidator;
+import com.progressoft.fxdeals.exception.RequestAlreadyExistException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.UUID;
-
 
 @Service
 @RequiredArgsConstructor
@@ -23,52 +20,22 @@ public class FxDealServiceImpl implements FxDealService {
 
     private final FxDealRepository repo;
     private final FxDealMapper mapper;
+    private final FxDealValidator validator;
 
     @Override
-    public void importDeals(List<FxDealRequest> requests) {
-        if (requests == null || requests.isEmpty()) {
-            log.warn("importDeals called with no requests");
-            return;
+    public FxDealResponse importDeal(FxDealRequest dto) {
+        validator.validate(dto);
+
+        log.info("Importing deal: id={}, from={}, to={}, amount={}",
+                dto.id(), dto.fromCurrency(), dto.toCurrency(), dto.amount());
+
+        if (repo.existsById(dto.id())) {
+            log.warn("Duplicate ID detected: {}. Aborting.", dto.id());
+            throw new RequestAlreadyExistException("Deal with ID " + dto.id() + " already exists");
         }
-
-        for (FxDealRequest r : requests) {
-            UUID dealId = r.id();
-
-            if (repo.existsById(dealId)) {
-                log.info("Skipping duplicate FX deal with ID {}", dealId);
-                continue;
-            }
-            FxDeal entity = FxDeal.builder()
-                    .id(dealId)
-                    .fromCurrency(r.fromCurrency())
-                    .toCurrency(r.toCurrency())
-                    .dealTimestamp(r.dealTimestamp())
-                    .amount(r.amount())
-                    .build();
-
-            try {
-                repo.save(entity);
-                log.info("Inserted FX deal {}", dealId);
-            } catch (DataIntegrityViolationException ex) {
-                log.error("Data integrity violation when inserting FX deal {}: {}", dealId, ex.getMessage());
-            } catch (Exception ex) {
-                log.error("Unexpected error when inserting FX deal {}: {}", dealId, ex.getMessage());
-            }
-        }
+        FxDeal entity = mapper.toEntity(dto);
+        FxDeal saved = repo.save(entity);
+        return mapper.toResponse(saved);
     }
 
-    @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public List<FxDealResponse> getAllDeals() {
-        List<FxDeal> allEntities = repo.findAll();
-        return mapper.toResponseList(allEntities);
-    }
-
-    @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public FxDealResponse getDealById(UUID id) {
-        FxDeal entity = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("FX deal not found: " + id));
-        return mapper.toResponse(entity);
-    }
 }

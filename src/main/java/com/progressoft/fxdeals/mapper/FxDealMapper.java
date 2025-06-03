@@ -1,16 +1,16 @@
 package com.progressoft.fxdeals.mapper;
 
-import com.progressoft.fxdeals.dto.response.FxDealResponse;
-import com.progressoft.fxdeals.model.FxDeal;
 import org.mapstruct.Mapper;
 
-import java.util.List;
+import com.progressoft.fxdeals.dto.request.FxDealRequest;
+import com.progressoft.fxdeals.dto.response.FxDealResponse;
+import com.progressoft.fxdeals.model.FxDeal;
 
 
 @Mapper(componentModel = "spring")
 public interface FxDealMapper {
+    
+    FxDeal toEntity(FxDealRequest dto);
 
-    FxDealResponse toResponse(FxDeal entity);
-
-    List<FxDealResponse> toResponseList(List<FxDeal> entities);
+    FxDealResponse toResponse(FxDeal deal);
 }
